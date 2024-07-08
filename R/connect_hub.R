@@ -112,14 +112,17 @@ connect_hub.default <- function(hub_path,
   }
   hub_name <- config_admin$name
 
+  # List model-output files by file_format
+  files_by_format <- list_dir_files_by_format(hub_path, model_output_dir, file_format, local=TRUE)
+  
   # Only keep file formats of which files actually exist in model_output_dir.
-  file_format <- check_file_format(model_output_dir, file_format)
+  file_format <- check_file_format(files_by_format, file_format)
 
   if (length(file_format) == 0L) {
     dataset <- list()
   } else {
     dataset <- open_hub_datasets(
-      model_output_dir,
+      files_by_format,
       file_format,
       config_tasks,
       output_type_id_datatype = output_type_id_datatype,
@@ -186,14 +189,17 @@ connect_hub.SubTreeFileSystem <- function(hub_path,
   }
   hub_name <- config_admin$name
 
+  # List model-output files by file_format
+  files_by_format <- list_dir_files_by_format(hub_path, model_output_dir, file_format, local=FALSE)
+
   # Only keep file formats of which files actually exist in model_output_dir.
-  file_format <- check_file_format(model_output_dir, file_format)
+  file_format <- check_file_format(files_by_format, file_format)
 
   if (length(file_format) == 0L) {
     dataset <- list()
   } else {
     dataset <- open_hub_datasets(
-      model_output_dir,
+      files_by_format,
       file_format,
       config_tasks,
       output_type_id_datatype = output_type_id_datatype,
@@ -228,7 +234,7 @@ connect_hub.SubTreeFileSystem <- function(hub_path,
   )
 }
 
-open_hub_dataset <- function(model_output_dir,
+open_hub_dataset <- function(files_by_format,
                              file_format = c("csv", "parquet", "arrow"),
                              config_tasks,
                              output_type_id_datatype = c(
@@ -245,34 +251,31 @@ open_hub_dataset <- function(model_output_dir,
 
   switch(file_format,
     csv = arrow::open_dataset(
-      model_output_dir,
+      files_by_format[["csv"]],
       format = "csv",
       partitioning = "model_id",
       col_types = schema,
       unify_schemas = FALSE,
-      strings_can_be_null = TRUE,
-      factory_options = list(exclude_invalid_files = TRUE)
+      strings_can_be_null = TRUE
     ),
     parquet = arrow::open_dataset(
-      model_output_dir,
+      files_by_format[["parquet"]],
       format = "parquet",
       partitioning = "model_id",
       schema = schema,
       unify_schemas = FALSE,
-      factory_options = list(exclude_invalid_files = TRUE)
     ),
     arrow = arrow::open_dataset(
-      model_output_dir,
+      files_by_format[["arrow"]],
       format = "arrow",
       partitioning = "model_id",
       schema = schema,
-      unify_schemas = FALSE,
-      factory_options = list(exclude_invalid_files = TRUE)
+      unify_schemas = FALSE
     )
   )
 }
 
-open_hub_datasets <- function(model_output_dir,
+open_hub_datasets <- function(files_by_format,
                               file_format = c("csv", "parquet", "arrow"),
                               config_tasks,
                               output_type_id_datatype = c(
@@ -284,7 +287,7 @@ open_hub_datasets <- function(model_output_dir,
                               call = rlang::caller_env()) {
   if (length(file_format) == 1L) {
     open_hub_dataset(
-      model_output_dir,
+      files_by_format,
       file_format,
       config_tasks,
       output_type_id_datatype,
@@ -294,7 +297,7 @@ open_hub_datasets <- function(model_output_dir,
     cons <- purrr::map(
       file_format,
       ~ open_hub_dataset(
-        model_output_dir,
+        files_by_format,
         .x,
         config_tasks,
         output_type_id_datatype,

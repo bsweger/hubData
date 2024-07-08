@@ -102,10 +102,10 @@ get_file_format_meta <- function(dataset, model_output_dir, file_format) {
   rbind(n_open, n_in_dir)
 }
 
-check_file_format <- function(model_output_dir, file_format,
+check_file_format <- function(files_by_format, file_format,
                               call = rlang::caller_env(), error = FALSE) {
-  dir_file_formats <- get_dir_file_formats(model_output_dir)
-  valid_file_format <- file_format[file_format %in% dir_file_formats]
+  file_format_checks <- lapply(file_format, function(format) {length(files_by_format[[format]]) > 0})
+  valid_file_format <- file_format[unlist(file_format_checks)]
 
   if (length(valid_file_format) == 0L && error) {
     cli::cli_abort("No files of file format{?s}
@@ -183,7 +183,6 @@ list_dir_files <- function(model_output_dir, file_format = NULL) {
   UseMethod("list_dir_files")
 }
 
-
 #' @export
 list_dir_files.default <- function(model_output_dir, file_format = NULL) {
   if (is.null(file_format)) {
@@ -225,10 +224,26 @@ list_dataset_files.UnionDataset <- function(dataset) {
   )
 }
 
-get_dir_file_formats <- function(model_output_dir) {
-  all_ext <- list_dir_files(model_output_dir) %>%
-    fs::path_ext() %>%
-    unique()
+# get_dir_file_formats <- function(model_output_dir) {
+#   all_ext <- list_dir_files(model_output_dir) %>%
+#     fs::path_ext() %>%
+#     unique()
 
-  intersect(all_ext, c("csv", "parquet", "arrow"))
+#   intersect(all_ext, c("csv", "parquet", "arrow"))
+# }
+
+
+list_dir_files_by_format <- function(hub_path, model_output_dir, file_format, local) {
+  all_files <- list_dir_files(model_output_dir)
+  if (isFALSE(local)) {
+    # format each file with its full URI
+    all_files <- paste0(
+      hub_path$url_scheme,
+      "://",
+      hub_path$base_path,
+      model_output_dir$base_path,
+      all_files)
+  }
+  files_by_format <- purrr::map(file_format, ~ (str_subset(all_files, .x)))
+  setNames(as.list(files_by_format), file_format)
 }
